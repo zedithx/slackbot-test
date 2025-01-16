@@ -1,16 +1,33 @@
 import os
+import logging
+import threading
+import time
 from slack_sdk import WebClient
 from slack_sdk.socket_mode import SocketModeClient
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.errors import SlackApiError
 from dotenv import load_dotenv
 from datetime import datetime
-import logging
 
 # For excel writing
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
+from utils.mail_function import send_email_with_excel, schedule_email
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more details
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+load_dotenv('../.env')
+
+# Initialize Slack clients
+slack_bot_token = os.getenv("SLACK_BOT_TOKEN")
+slack_app_token = os.getenv("SLACK_APP_TOKEN")
+
+web_client = WebClient(token=slack_bot_token)
+socket_client = SocketModeClient(app_token=slack_app_token, web_client=web_client)
 
 def get_user_name(user_id):
     """
@@ -54,22 +71,6 @@ def check_duplicate_user(excel_file, user):
     return False
 
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more details
-logger = logging.getLogger(__name__)
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Initialize Slack clients
-slack_bot_token = os.getenv("SLACK_BOT_TOKEN")
-slack_app_token = os.getenv("SLACK_APP_TOKEN")
-
-web_client = WebClient(token=slack_bot_token)
-socket_client = SocketModeClient(app_token=slack_app_token, web_client=web_client)
-
-# A simple list to store logs of user messages
-message_log = []
 
 def handle_message(event_data):
     message = event_data.get("text", "")
@@ -154,10 +155,14 @@ if __name__ == "__main__":
 
     # Connect to Slack
     socket_client.connect()
+    # Schedule the email to be sent at 23:59 Singapore Time (SGT)
+
+    # Run the scheduler in a separate thread
+    scheduler_thread = threading.Thread(target=schedule_email, daemon=True)
+    scheduler_thread.start()
 
     # Prevent the script from exiting
     try:
-        import time
         while True:
             time.sleep(1)  # Keep the script alive
     except KeyboardInterrupt:
