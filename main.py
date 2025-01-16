@@ -12,14 +12,28 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
 
+def get_user_name(user_id):
+    """
+    Retrieve the user's display name from Slack using their user ID.
+    """
+    try:
+        response = web_client.users_info(user=user_id)
+        if response["ok"]:
+            return response["user"]["profile"]["real_name"] or response["user"]["name"]
+        else:
+            print(f"Failed to fetch user info: {response['error']}")
+    except SlackApiError as e:
+        print(f"Error fetching user info: {e.response['error']}")
+    return "Unknown User"
+
 # Function to initialize the Excel file if it doesn't exist
 def initialize_excel_file(path):
     # Format the filename as "DD-MM_CIT.xlsx"
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "Checkin Log"
+    sheet.title = "Check in CAG"
     # Write headers
-    sheet.append(["User", "Message", "Timestamp"])
+    sheet.append(["User", "Timestamp"])
     workbook.save(path)
 
 
@@ -61,43 +75,43 @@ def handle_message(event_data):
     message = event_data.get("text", "")
     user = event_data.get("user", "")
     channel = event_data.get("channel", "")
+    user_name = get_user_name(user)
 
     if "checkin" in message.lower() or "check in" in message.lower():
-        # Save the message to the log
-        message_log.append({
-            "user": user,
-            "text": message,
-            "timestamp": datetime.utcnow().strftime("%H:%M"),
-        })
         # Write to an excel instead
-        row_data = [user, datetime.utcnow().strftime("%H:%M")]
+        row_data = [user_name, datetime.utcnow().strftime("%H:%M")]
         # Send confirmation to the channel
         # This will determine file path
         current_date = datetime.now().strftime("%d-%m_CIT")
         excel_file = f"checkin_records/{current_date}.xlsx"
         if not os.path.exists(excel_file):
             initialize_excel_file(excel_file)
-        elif check_duplicate_user(excel_file, user):
+        elif check_duplicate_user(excel_file, user_name):
             # return error message
             web_client.chat_postMessage(
                 channel=channel,
-                text=f"Hi @{user}. You have already checked in for today! Please do not send duplicate messages 😡."
+                text=f"Hi @{user_name}. You have already checked in for today! Please do not send duplicate messages 😡."
             )
-        else:
-            workbook = load_workbook(excel_file)
-            sheet = workbook.active
-            sheet.append(row_data)  # Append the row
-            workbook.save(excel_file)  # Save changes
-            logger.info(f"Check in for @{user} has been recorded in the excel")
+            return
+        workbook = load_workbook(excel_file)
+        sheet = workbook.active
+        sheet.append(row_data)  # Append the row
+        workbook.save(excel_file)  # Save changes
+        logger.info(f"Check in for @{user_name} has been recorded in the excel")
         try:
             web_client.chat_postMessage(
                 channel=channel,
-                text=f"@{user} has checked in! Have a wonderful day at the office today!."
+                text=f"@{user_name} has checked in! Have a wonderful day at the office today!."
             )
-            logger.info(f"Check in for @{user} is successful")
+            logger.info(f"Check in for @{user_name} is successful")
         except SlackApiError as e:
             logger.info(f"Error posting message: {e.response['error']}")
-
+    else:
+        web_client.chat_postMessage(
+            channel=channel,
+            text=f"Hi @{user_name}. I do not understand that message. Please send only either 'Check In' or 'Checkin'."
+        )
+        logger.info(f"@{user_name} sent an invalid message")
 # Function to handle app mentions for "show notes"
 # def handle_app_mention(event_data):
 #     text = event_data.get("text", "")
