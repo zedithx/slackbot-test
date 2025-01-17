@@ -13,7 +13,7 @@ from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
-from utils.mail_function import send_email_with_excel, schedule_email
+from utils.mail_function import schedule_email
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more details
@@ -131,6 +131,7 @@ def handle_message(event_data):
 #         except SlackApiError as e:
 #             logger.info(f"Error posting message: {e.response['error']}")
 
+
 # Handle events from the Socket Mode client
 def handle_events(client, payload):
     # Log the payload for debugging
@@ -147,6 +148,7 @@ def handle_events(client, payload):
 
         # Acknowledge the event
         client.send_socket_mode_response(SocketModeResponse(envelope_id=payload.envelope_id))
+
 
 # Start the Socket Mode client
 if __name__ == "__main__":
